@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -25,14 +26,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             
             <nav className="flex-1 p-4 space-y-2 mt-4">
               <div className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Principal</div>
-              <a href="#" className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-all text-slate-400 hover:text-white group">
+              <Link href="/" className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-all text-slate-400 hover:text-white group">
                 <div className="w-1.5 h-1.5 rounded-full bg-slate-700 group-hover:bg-indigo-500 transition-colors" />
                 Panel de Control
-              </a>
-              <a href="/flujo-caja" className="flex items-center gap-3 p-3 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-lg shadow-indigo-500/5">
+              </Link>
+              <Link href="/flujo-caja" className="flex items-center gap-3 p-3 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shadow-lg shadow-indigo-500/5">
                 <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                 Flujo de Caja
-              </a>
+              </Link>
 
               <div className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-6">Estrategia</div>
               <a href="#" className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-all text-slate-400 hover:text-white group italic opacity-50">

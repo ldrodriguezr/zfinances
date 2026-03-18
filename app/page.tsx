@@ -1,65 +1,96 @@
-import Image from "next/image";
+import { createClient } from '@/utils/supabase/server'
 
-export default function Home() {
+function symbolForCurrency(code: string) {
+  if (code === 'USD') return '$'
+  return '₡'
+}
+
+function formatMoney(amount: number, code: string) {
+  const symbol = symbolForCurrency(code)
+  const n = Number.isFinite(amount) ? amount : 0
+  // Para CRC/moneda base se usa el símbolo; separador depende del runtime.
+  return `${symbol}${n.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+}
+
+export default async function ControlPanelPage() {
+  const supabase = await createClient()
+
+  const { data: userData } = await supabase.auth.getUser()
+  const user = userData.user
+
+  if (!user) {
+    return (
+      <div className="p-10 max-w-3xl mx-auto space-y-6 animate-in fade-in duration-700">
+        <h1 className="text-3xl font-extrabold tracking-tight text-white">Panel de Control</h1>
+        <div className="p-8 rounded-3xl bg-slate-900/40 border border-slate-800 shadow-2xl">
+          <p className="text-slate-300">Inicia sesión para ver tu saldo, ingresos y gastos.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const { data: settings } = await supabase
+    .from('user_settings')
+    .select('home_currency')
+    .single()
+
+  const homeCurrency = String(settings?.home_currency ?? 'CRC')
+
+  const now = new Date()
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0)).toISOString()
+
+  const [incomeRes, expenseRes] = await Promise.all([
+    supabase
+      .from('transactions')
+      .select('amount_home')
+      .eq('flow_type', 'INCOME')
+      .eq('status', 'PROCESSED')
+      .gte('occurred_at', monthStart),
+    supabase
+      .from('transactions')
+      .select('amount_home')
+      .eq('flow_type', 'EXPENSE')
+      .eq('status', 'PROCESSED')
+      .gte('occurred_at', monthStart),
+  ])
+
+  const incomeHome = (incomeRes.data ?? []).reduce((acc: number, r: any) => acc + Number(r.amount_home ?? 0), 0)
+  const expenseHome = (expenseRes.data ?? []).reduce((acc: number, r: any) => acc + Number(r.amount_home ?? 0), 0)
+  const saldoHome = incomeHome - expenseHome
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="p-10 max-w-7xl mx-auto space-y-10 animate-in fade-in duration-700">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-extrabold tracking-tight text-white">Panel de Control</h1>
+          <p className="text-slate-400 mt-1">KPI de tu mes actual (UTC) en tu moneda base.</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="text-right">
+          <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-full uppercase tracking-widest border border-emerald-500/20">
+            En Línea • Supabase Sync
+          </span>
         </div>
-      </main>
+      </header>
+
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="relative group overflow-hidden p-8 rounded-3xl bg-slate-900/40 border border-slate-800 hover:border-indigo-500/50 transition-all shadow-2xl">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Saldo</p>
+          <h3 className="text-4xl font-black mt-3 text-white">{formatMoney(saldoHome, homeCurrency)}</h3>
+          <p className="text-[10px] text-slate-500 mt-2">Ingresos - Gastos (home)</p>
+        </div>
+
+        <div className="p-8 rounded-3xl bg-slate-900/40 border border-slate-800 shadow-2xl">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Ingresos</p>
+          <h3 className="text-4xl font-black mt-3 text-white">{formatMoney(incomeHome, homeCurrency)}</h3>
+          <p className="text-[10px] text-slate-500 mt-2">Ejecutado este mes</p>
+        </div>
+
+        <div className="p-8 rounded-3xl bg-gradient-to-br from-indigo-600/20 to-cyan-600/20 border border-indigo-500/30 shadow-2xl backdrop-blur-md">
+          <p className="text-xs font-bold text-indigo-300 uppercase tracking-widest">Gastos</p>
+          <h3 className="text-4xl font-black mt-3 text-white">{formatMoney(expenseHome, homeCurrency)}</h3>
+          <p className="text-[10px] text-indigo-200/60 mt-2">Ejecutado este mes</p>
+        </div>
+      </section>
     </div>
-  );
+  )
 }
