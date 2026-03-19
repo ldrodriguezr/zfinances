@@ -18,12 +18,8 @@ export default function TransactionForm({ accounts, categories }: Props) {
   const [selectedCategoryLevel2, setSelectedCategoryLevel2] = useState<string>('')
 
   const filteredAccounts = useMemo(() => {
-    const byCurrency = accounts.filter((a) => a.currency === selectedCurrency)
-    if (selectedFlowType === 'EXPENSE') {
-      return byCurrency.filter((a) => a.account_type === 'LIQUIDITY' || a.account_type === 'CREDIT')
-    }
-    return byCurrency.filter((a) => a.account_type === 'LIQUIDITY')
-  }, [accounts, selectedCurrency, selectedFlowType])
+    return accounts.filter((a) => a.currency === selectedCurrency)
+  }, [accounts, selectedCurrency])
 
   const level1Categories = useMemo(() => categories.filter((c) => c.level === 1), [categories])
   const level2Categories = useMemo(
@@ -90,7 +86,7 @@ export default function TransactionForm({ accounts, categories }: Props) {
             <option value="">Selecciona cuenta...</option>
             {filteredAccounts.map((acc) => (
               <option key={acc.id} value={acc.id}>
-                {acc.name} ({acc.account_type === 'CREDIT' ? 'Crédito' : 'Liquidez'})
+                {acc.name}
               </option>
             ))}
           </select>

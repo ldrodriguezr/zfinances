@@ -3,10 +3,11 @@
 import { createClient } from '@/utils/supabase/server'
 
 const SEED_ACCOUNTS = [
-  { name: 'Efectivo CRC', account_type: 'LIQUIDITY', currency: 'CRC' },
-  { name: 'BAC CRC', account_type: 'LIQUIDITY', currency: 'CRC' },
-  { name: 'SINPE CRC', account_type: 'LIQUIDITY', currency: 'CRC' },
-  { name: 'AMEX USD', account_type: 'CREDIT', currency: 'USD' },
+  { name: 'Efectivo', account_type: 'LIQUIDITY', currency: 'CRC' },
+  { name: 'SINPE', account_type: 'LIQUIDITY', currency: 'CRC' },
+  { name: 'Transferencia', account_type: 'LIQUIDITY', currency: 'CRC' },
+  { name: 'BAC TC Master', account_type: 'CREDIT', currency: 'CRC' },
+  { name: 'BAC TC AMEX', account_type: 'CREDIT', currency: 'USD' },
 ] as const
 
 const SEED_CATEGORIES: Array<{
@@ -91,6 +92,19 @@ export async function ensureUserSeed(userId: string) {
     .eq('user_id', userId)
 
   const existingNames = new Set((existingAccounts ?? []).map((a) => a.name))
+  const seedNames = new Set(SEED_ACCOUNTS.map((a) => a.name))
+
+  // Desactivar cuentas viejas del seed anterior que ya no están en la lista
+  const oldSeedNames = ['Efectivo CRC', 'BAC CRC', 'SINPE CRC', 'AMEX USD', 'Efectivo Principal', 'SINPE Móvil', 'TC Master BAC', 'TC AMEX Scotiabank', 'Efectivo/Principal']
+  for (const oldName of oldSeedNames) {
+    if (existingNames.has(oldName) && !seedNames.has(oldName)) {
+      await supabase
+        .from('accounts')
+        .update({ is_active: false })
+        .eq('user_id', userId)
+        .eq('name', oldName)
+    }
+  }
 
   for (const acc of SEED_ACCOUNTS) {
     if (existingNames.has(acc.name)) continue
