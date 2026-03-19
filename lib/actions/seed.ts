@@ -3,108 +3,72 @@
 import { createClient } from '@/utils/supabase/server'
 
 const SEED_ACCOUNTS = [
-  { name: 'Efectivo', account_type: 'LIQUIDITY', currency: 'CRC' },
-  { name: 'SINPE', account_type: 'LIQUIDITY', currency: 'CRC' },
-  { name: 'Transferencia', account_type: 'LIQUIDITY', currency: 'CRC' },
-  { name: 'BAC TC Master', account_type: 'CREDIT', currency: 'CRC' },
-  { name: 'BAC TC AMEX', account_type: 'CREDIT', currency: 'USD' },
+  { name: 'Checking', account_type: 'LIQUIDITY', currency: 'CRC' },
+  { name: 'Cash', account_type: 'LIQUIDITY', currency: 'CRC' },
+  { name: 'Credit Card', account_type: 'CREDIT', currency: 'CRC' },
 ] as const
 
-const SEED_CATEGORIES: Array<{
+const SEED_CATEGORY_GROUPS: Array<{
   name: string
   kind: 'EXPENSE' | 'INCOME'
-  children?: string[]
+  children: string[]
 }> = [
   {
-    name: 'Vivienda',
+    name: 'Immediate Obligations',
     kind: 'EXPENSE',
-    children: ['Renta/Hipoteca', 'Mantenimiento hogar', 'Seguros hogar'],
+    children: ['Rent/Mortgage', 'Electric', 'Water', 'Internet', 'Phone', 'Groceries'],
   },
   {
-    name: 'Servicios Públicos',
+    name: 'True Expenses',
     kind: 'EXPENSE',
-    children: ['Agua', 'Electricidad', 'Internet/Cable', 'Telefonía'],
+    children: [
+      'Auto Maintenance',
+      'Home Maintenance',
+      'Medical',
+      'Clothing',
+      'Gifts',
+      'Annual Subscriptions',
+      'Insurance',
+    ],
   },
   {
-    name: 'Supermercado',
+    name: 'Debt Payments',
     kind: 'EXPENSE',
-    children: ['Comida casa', 'Limpieza', 'Productos personales'],
+    children: ['Credit Card Payment', 'Student Loan', 'Car Payment'],
   },
   {
-    name: 'Restaurantes',
+    name: 'Quality of Life',
     kind: 'EXPENSE',
-    children: ['Comida fuera', 'Delivery', 'Cafetería'],
+    children: [
+      'Dining Out',
+      'Entertainment',
+      'Education',
+      'Fitness',
+      'Personal Care',
+      'Subscriptions',
+    ],
   },
   {
-    name: 'Transporte',
+    name: 'Savings Goals',
     kind: 'EXPENSE',
-    children: ['Gasolina', 'Uber/DiDi', 'Bus/Tren', 'Parqueo', 'Mantenimiento vehículo'],
+    children: ['Emergency Fund', 'Vacation', 'New Car', 'Down Payment'],
   },
   {
-    name: 'Salud',
-    kind: 'EXPENSE',
-    children: ['Farmacia', 'Citas médicas', 'Seguro médico', 'Dental/Óptica'],
-  },
-  {
-    name: 'Entretenimiento',
-    kind: 'EXPENSE',
-    children: ['Cine/Teatro', 'Suscripciones', 'Viajes/Vacaciones', 'Hobbies'],
-  },
-  {
-    name: 'Educación',
-    kind: 'EXPENSE',
-    children: ['Cursos', 'Libros', 'Materiales', 'Matrícula'],
-  },
-  {
-    name: 'Compras',
-    kind: 'EXPENSE',
-    children: ['Ropa/Calzado', 'Tecnología', 'Electrodomésticos'],
-  },
-  {
-    name: 'Finanzas',
-    kind: 'EXPENSE',
-    children: ['Pago tarjetas', 'Intereses', 'Comisiones bancarias', 'Seguros'],
-  },
-  {
-    name: 'Impuestos',
-    kind: 'EXPENSE',
-    children: ['Renta', 'Marchamo', 'Municipalidad'],
-  },
-  {
-    name: 'Mascotas',
-    kind: 'EXPENSE',
-    children: ['Veterinario', 'Comida mascota', 'Accesorios'],
-  },
-  {
-    name: 'Ingresos',
+    name: 'Income',
     kind: 'INCOME',
-    children: ['Salario', 'Freelance', 'Inversiones', 'Otros ingresos'],
+    children: ['Salary', 'Freelance', 'Investments', 'Other Income'],
   },
 ]
 
 export async function ensureUserSeed(userId: string) {
   const supabase = await createClient()
 
-  // --- Accounts ---
   const { data: existingAccounts } = await supabase
     .from('accounts')
     .select('id, name')
     .eq('user_id', userId)
 
-  const existingNames = new Set((existingAccounts ?? []).map((a) => a.name))
-  const seedNames: Set<string> = new Set(SEED_ACCOUNTS.map((a) => a.name))
-
-  // Desactivar cuentas viejas del seed anterior que ya no están en la lista
-  const oldSeedNames = ['Efectivo CRC', 'BAC CRC', 'SINPE CRC', 'AMEX USD', 'Efectivo Principal', 'SINPE Móvil', 'TC Master BAC', 'TC AMEX Scotiabank', 'Efectivo/Principal']
-  for (const oldName of oldSeedNames) {
-    if (existingNames.has(oldName) && !seedNames.has(oldName)) {
-      await supabase
-        .from('accounts')
-        .update({ is_active: false })
-        .eq('user_id', userId)
-        .eq('name', oldName)
-    }
-  }
+  const existingNames = new Set((existingAccounts ?? []).map((a: any) => a.name))
 
   for (const acc of SEED_ACCOUNTS) {
     if (existingNames.has(acc.name)) continue
@@ -115,55 +79,51 @@ export async function ensureUserSeed(userId: string) {
       currency: acc.currency,
       is_active: true,
     })
-    existingNames.add(acc.name)
   }
 
-  // --- Categories (multinivel) ---
   const { data: existingCats } = await supabase
     .from('categories')
-    .select('id, name, level')
+    .select('id, name, level, parent_category_id')
     .eq('user_id', userId)
 
-  const existingL1Names = new Set(
-    (existingCats ?? []).filter((c) => c.level === 1).map((c) => c.name)
-  )
+  const existingL1 = (existingCats ?? []).filter((c: any) => c.level === 1)
+  const existingL1Names = new Set(existingL1.map((c: any) => c.name))
 
-  for (const cat of SEED_CATEGORIES) {
+  for (const group of SEED_CATEGORY_GROUPS) {
     let parentId: string | null = null
 
-    if (!existingL1Names.has(cat.name)) {
+    if (!existingL1Names.has(group.name)) {
       const { data: inserted } = await supabase
         .from('categories')
         .insert({
           user_id: userId,
-          name: cat.name,
+          name: group.name,
           level: 1,
           parent_category_id: null,
-          category_kind: cat.kind,
+          category_kind: group.kind,
         })
         .select('id')
         .single()
       parentId = inserted?.id ?? null
-      existingL1Names.add(cat.name)
     } else {
-      const found = (existingCats ?? []).find((c) => c.name === cat.name && c.level === 1)
+      const found = existingL1.find((c: any) => c.name === group.name)
       parentId = found?.id ?? null
     }
 
-    if (parentId && cat.children?.length) {
-      const existingL2Names = new Set(
+    if (parentId && group.children.length) {
+      const existingChildNames = new Set(
         (existingCats ?? [])
-          .filter((c) => c.level === 2)
-          .map((c) => c.name)
+          .filter((c: any) => c.level === 2 && c.parent_category_id === parentId)
+          .map((c: any) => c.name)
       )
-      for (const childName of cat.children) {
-        if (existingL2Names.has(childName)) continue
+      for (const childName of group.children) {
+        if (existingChildNames.has(childName)) continue
         await supabase.from('categories').insert({
           user_id: userId,
           name: childName,
           level: 2,
           parent_category_id: parentId,
-          category_kind: cat.kind,
+          category_kind: group.kind,
         })
       }
     }

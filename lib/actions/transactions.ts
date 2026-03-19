@@ -7,53 +7,51 @@ import { postIngestedTransactionToLedger } from '@/lib/ledger/ledger'
 
 export type ActionResult = { success: true } | { success: false; error: string }
 
-export async function createTransaction(formData: FormData): Promise<ActionResult> {
+export async function createTransaction(params: {
+  date: string
+  payee: string
+  categoryId?: string
+  memo?: string
+  accountId: string
+  outflow?: number
+  inflow?: number
+  currency?: string
+}): Promise<ActionResult> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { success: false, error: 'No autorizado' }
+    if (!user) return { success: false, error: 'Not authorized' }
 
-    const amountRaw = formData.get('amount') as string
-    const currency = formData.get('currency') as 'CRC' | 'USD'
-    const liquidityAccountId = formData.get('account_id') as string
-    const date = formData.get('date') as string
-    const description = (formData.get('description') as string) ?? ''
-    const merchant = (formData.get('merchant') as string) ?? null
-    const flowType = (formData.get('flow_type') as 'INCOME' | 'EXPENSE' | 'TRANSFER') ?? 'EXPENSE'
-    const categoryLevel1Id = (formData.get('category_level1_id') as string) || undefined
-    const categoryLevel2Id = (formData.get('category_level2_id') as string) || undefined
-    const tagLevel3Id = (formData.get('tag_level3_id') as string) || undefined
-
-    const amount = Math.abs(parseFloat(amountRaw))
-    const occurredAtISO = new Date(date).toISOString()
+    const amount = (params.outflow || 0) > 0 ? params.outflow! : (params.inflow || 0)
+    const flowType = (params.outflow || 0) > 0 ? 'EXPENSE' : 'INCOME'
+    const currency = params.currency || 'CRC'
 
     const externalReference = crypto
       .createHash('sha256')
-      .update(`${user.id}|${liquidityAccountId}|${occurredAtISO}|${amount}|${currency}|${flowType}|${description}|${merchant ?? ''}|${Date.now()}`)
+      .update(`${user.id}|${params.accountId}|${params.date}|${amount}|${flowType}|${Date.now()}`)
       .digest('hex')
 
     await postIngestedTransactionToLedger({
       userId: user.id,
       sourceType: 'MANUAL',
-      occurredAtISO,
-      description,
-      merchant: merchant ?? undefined,
+      occurredAtISO: new Date(params.date).toISOString(),
+      description: params.memo || params.payee,
+      merchant: params.payee,
       externalReference,
-      amount,
+      amount: Math.abs(amount),
       currency,
       flowType,
       isDebitLike: flowType === 'EXPENSE',
-      liquidityAccountId,
-      categoryLevel1Id,
-      categoryLevel2Id,
-      tagLevel3Id,
+      liquidityAccountId: params.accountId,
+      categoryLevel1Id: params.categoryId || undefined,
     })
 
-    revalidatePath('/flujo-caja')
+    revalidatePath('/budget')
+    revalidatePath('/accounts')
     revalidatePath('/')
     return { success: true }
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'Error al crear transacción' }
+    return { success: false, error: err instanceof Error ? err.message : 'Error creating transaction' }
   }
 }
 
@@ -68,7 +66,7 @@ export async function updateTransaction(params: {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { success: false, error: 'No autorizado' }
+    if (!user) return { success: false, error: 'Not authorized' }
 
     const update: Record<string, any> = {}
     if (params.description !== undefined) update.description = params.description
@@ -84,11 +82,12 @@ export async function updateTransaction(params: {
       .eq('user_id', user.id)
 
     if (error) return { success: false, error: error.message }
-    revalidatePath('/flujo-caja')
+    revalidatePath('/budget')
+    revalidatePath('/accounts')
     revalidatePath('/')
     return { success: true }
   } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Error al actualizar' }
+    return { success: false, error: e instanceof Error ? e.message : 'Error updating' }
   }
 }
 
@@ -96,16 +95,17 @@ export async function deleteTransaction(id: string): Promise<ActionResult> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { success: false, error: 'No autorizado' }
+    if (!user) return { success: false, error: 'Not authorized' }
 
     await supabase.from('transaction_entries').delete().eq('transaction_id', id).eq('user_id', user.id)
     const { error } = await supabase.from('transactions').delete().eq('id', id).eq('user_id', user.id)
 
     if (error) return { success: false, error: error.message }
-    revalidatePath('/flujo-caja')
+    revalidatePath('/budget')
+    revalidatePath('/accounts')
     revalidatePath('/')
     return { success: true }
   } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Error al eliminar' }
+    return { success: false, error: e instanceof Error ? e.message : 'Error deleting' }
   }
 }

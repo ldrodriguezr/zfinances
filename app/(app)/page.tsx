@@ -1,230 +1,162 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
+import { getBudgetData } from '@/lib/actions/budget-assign'
+import { getAccountsWithBalances, getTransactionsForAccount } from '@/lib/actions/accounts'
+import { ensureUserSeed } from '@/lib/actions/seed'
 import Link from 'next/link'
-import { ensureUserOnboarding } from '@/lib/actions/onboarding'
-import { planExtraPaymentsToDebts } from '@/lib/debt/debt'
-import ExpensePieChart from '@/components/modules/ExpensePieChart'
 
-function symbolForCurrency(code: string) {
-  if (code === 'USD') return '$'
-  return '₡'
+function formatMoney(n: number) {
+  const prefix = n < 0 ? '-' : ''
+  return prefix + new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.abs(n))
 }
 
-function formatMoney(amount: number, code: string) {
-  const symbol = symbolForCurrency(code)
-  const n = Number.isFinite(amount) ? amount : 0
-  return `${symbol}${n.toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default async function ControlPanelPage() {
+export default async function HomePage() {
   const supabase = await createClient()
-
-  const { data: userData } = await supabase.auth.getUser()
-  const user = userData.user
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  await ensureUserOnboarding(user.id)
-
-  const { data: settings } = await supabase
-    .from('user_settings')
-    .select('home_currency, debt_strategy')
-    .single()
-
-  const homeCurrency = String(settings?.home_currency ?? 'CRC')
-  const strategy = (settings?.debt_strategy as 'SNOWBALL' | 'AVALANCHE') ?? 'AVALANCHE'
+  await ensureUserSeed(user.id)
 
   const now = new Date()
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0)).toISOString()
-  const monthLabel = now.toLocaleDateString('es-CR', { month: 'long', year: 'numeric' })
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
 
-  const [incomeRes, expenseRes, expenseByCatRes, debtsRes, assetsRes, accountsRes] = await Promise.all([
-    supabase
-      .from('transactions')
-      .select('amount_home')
-      .eq('user_id', user.id)
-      .eq('flow_type', 'INCOME')
-      .eq('status', 'PROCESSED')
-      .gte('occurred_at', monthStart),
-    supabase
-      .from('transactions')
-      .select('amount_home')
-      .eq('user_id', user.id)
-      .eq('flow_type', 'EXPENSE')
-      .eq('status', 'PROCESSED')
-      .gte('occurred_at', monthStart),
-    supabase
-      .from('transactions')
-      .select('amount_home, category_level1_id')
-      .eq('user_id', user.id)
-      .eq('flow_type', 'EXPENSE')
-      .eq('status', 'PROCESSED')
-      .gte('occurred_at', monthStart),
-    supabase
-      .from('debts')
-      .select('id, name, current_balance_home, apr_annual')
-      .eq('user_id', user.id)
-      .eq('is_active', true),
-    supabase
-      .from('assets')
-      .select('purchase_value, depreciation_rate_annual, purchase_date, residual_value_home')
-      .eq('user_id', user.id)
-      .eq('is_active', true),
-    supabase
-      .from('accounts')
-      .select('id, name, account_type, currency')
-      .eq('user_id', user.id)
-      .eq('is_active', true),
+  const [budgetData, accounts, recentTx] = await Promise.all([
+    getBudgetData(user.id, monthStart),
+    getAccountsWithBalances(user.id),
+    getTransactionsForAccount(user.id),
   ])
 
-  const incomeHome = (incomeRes.data ?? []).reduce((acc: number, r: any) => acc + Number(r.amount_home ?? 0), 0)
-  const expenseHome = (expenseRes.data ?? []).reduce((acc: number, r: any) => acc + Number(r.amount_home ?? 0), 0)
-  const saldoHome = incomeHome - expenseHome
-  const savingsRate = incomeHome > 0 ? ((incomeHome - expenseHome) / incomeHome) * 100 : 0
+  const totalBalance = accounts.reduce((sum: number, a: any) => sum + a.balance, 0)
+  const fundedGroups = budgetData.groups.filter((g) => g.available >= 0).length
+  const totalGroups = budgetData.groups.length
 
-  const categorySums = new Map<string, number>()
-  for (const r of expenseByCatRes.data ?? []) {
-    const catId = r.category_level1_id ?? 'sin_categoria'
-    categorySums.set(catId, (categorySums.get(catId) ?? 0) + Number(r.amount_home ?? 0))
-  }
-
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('id, name')
-    .eq('user_id', user.id)
-    .eq('level', 1)
-  const categoryMap = new Map((categories ?? []).map((c) => [c.id, c.name]))
-
-  const pieData = Array.from(categorySums.entries()).map(([catId, value]) => ({
-    name: categoryMap.get(catId) ?? (catId === 'sin_categoria' ? 'Sin categoría' : catId),
-    value: Math.round(value * 100) / 100,
-  }))
-
-  const debts = (debtsRes.data ?? []).map((d: any) => ({
-    id: d.id,
-    name: d.name,
-    balance: Number(d.current_balance_home ?? 0),
-    apr: Number(d.apr_annual ?? 0),
-  }))
-  const totalDeuda = debts.reduce((acc, d) => acc + d.balance, 0)
-  const orderedDebts =
-    strategy === 'SNOWBALL'
-      ? [...debts].filter((d) => d.balance > 0).sort((a, b) => a.balance - b.balance)
-      : [...debts].filter((d) => d.balance > 0).sort((a, b) => b.apr - a.apr)
-  const proximaDeuda = orderedDebts[0]
-
-  let plan: Array<{ debtId: string; amountHome: number }> = []
-  if (saldoHome > 0) {
-    try {
-      plan = await planExtraPaymentsToDebts({ userId: user.id, surplusHome: saldoHome, strategy, asOfISO: now.toISOString() })
-    } catch { plan = [] }
-  }
-  const proximaDeudaExtra = proximaDeuda ? plan.find((p) => p.debtId === proximaDeuda.id)?.amountHome ?? 0 : 0
-
-  let assetsTotal = 0
-  for (const a of assetsRes.data ?? []) {
-    const pv = Number(a.purchase_value ?? 0)
-    const rate = Number(a.depreciation_rate_annual ?? 0)
-    const pd = new Date(a.purchase_date)
-    const months = Math.max(0, (now.getUTCFullYear() - pd.getUTCFullYear()) * 12 + (now.getUTCMonth() - pd.getUTCMonth()))
-    const dep = pv * rate * (months / 12)
-    const res = a.residual_value_home != null ? Number(a.residual_value_home) : 0
-    assetsTotal += Math.max(pv - dep, res)
-  }
-  const netWorth = assetsTotal - totalDeuda
-  const accountCount = (accountsRes.data ?? []).length
+  const last5 = recentTx.slice(0, 8)
 
   return (
-    <div className="p-6 lg:p-10 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl lg:text-4xl font-extrabold tracking-tight text-white">Panel de Control</h1>
-          <p className="text-slate-400 mt-1 text-sm">
-            {monthLabel} — {accountCount} cuentas activas
-          </p>
-        </div>
-      </header>
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-white">Welcome back</h1>
+        <p className="text-sm text-ynab-text-muted mt-1">Here&apos;s your financial snapshot</p>
+      </div>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ingresos</p>
-          <h3 className="text-2xl font-black mt-2 text-emerald-400">{formatMoney(incomeHome, homeCurrency)}</h3>
-          <p className="text-[10px] text-slate-600 mt-1">mes actual</p>
-        </div>
-        <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Gastos</p>
-          <h3 className="text-2xl font-black mt-2 text-rose-400">{formatMoney(expenseHome, homeCurrency)}</h3>
-          <p className="text-[10px] text-slate-600 mt-1">mes actual</p>
-        </div>
-        <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-colors">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Saldo neto</p>
-          <h3 className={`text-2xl font-black mt-2 ${saldoHome >= 0 ? 'text-white' : 'text-rose-400'}`}>
-            {formatMoney(saldoHome, homeCurrency)}
-          </h3>
-          <p className="text-[10px] text-slate-600 mt-1">ingresos − gastos</p>
-        </div>
-        <div className="p-6 rounded-2xl bg-gradient-to-br from-indigo-600/20 to-cyan-600/20 border border-indigo-500/30">
-          <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">Tasa de ahorro</p>
-          <h3 className="text-2xl font-black mt-2 text-white">{savingsRate.toFixed(1)}%</h3>
-          <div className="mt-2 h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+      {/* Top cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Ready to Assign */}
+        <Link
+          href="/budget"
+          className={`rounded-xl border p-5 transition-colors hover:border-ynab-blue/50 ${
+            budgetData.readyToAssign > 0
+              ? 'bg-ynab-green/5 border-ynab-green/20'
+              : budgetData.readyToAssign < 0
+              ? 'bg-ynab-red/5 border-ynab-red/20'
+              : 'bg-ynab-surface border-ynab-border'
+          }`}
+        >
+          <p className="text-xs text-ynab-text-dim font-medium">Ready to Assign</p>
+          <p className={`text-2xl font-bold tabular-nums mt-1 ${
+            budgetData.readyToAssign > 0
+              ? 'text-ynab-green'
+              : budgetData.readyToAssign < 0
+              ? 'text-ynab-red'
+              : 'text-white'
+          }`}>
+            {formatMoney(budgetData.readyToAssign)}
+          </p>
+          <p className="text-[10px] text-ynab-text-dim mt-2">
+            {budgetData.readyToAssign > 0
+              ? 'Assign this money to categories'
+              : budgetData.readyToAssign < 0
+              ? 'Over-assigned! Move money back'
+              : 'Every dollar has a job'}
+          </p>
+        </Link>
+
+        {/* Total Balance */}
+        <Link
+          href="/accounts"
+          className="rounded-xl border border-ynab-border bg-ynab-surface p-5 transition-colors hover:border-ynab-blue/50"
+        >
+          <p className="text-xs text-ynab-text-dim font-medium">Total Balance</p>
+          <p className="text-2xl font-bold text-white tabular-nums mt-1">{formatMoney(totalBalance)}</p>
+          <p className="text-[10px] text-ynab-text-dim mt-2">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</p>
+        </Link>
+
+        {/* Categories Funded */}
+        <Link
+          href="/budget"
+          className="rounded-xl border border-ynab-border bg-ynab-surface p-5 transition-colors hover:border-ynab-blue/50"
+        >
+          <p className="text-xs text-ynab-text-dim font-medium">Categories Funded</p>
+          <p className="text-2xl font-bold text-white tabular-nums mt-1">
+            {fundedGroups}<span className="text-base text-ynab-text-dim font-normal">/{totalGroups}</span>
+          </p>
+          <div className="mt-2 h-1.5 rounded-full bg-ynab-border overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all duration-500"
-              style={{ width: `${Math.min(100, Math.max(0, savingsRate))}%` }}
+              className="h-full rounded-full bg-ynab-green transition-all"
+              style={{ width: totalGroups > 0 ? `${(fundedGroups / totalGroups) * 100}%` : '0%' }}
             />
           </div>
-        </div>
-      </section>
+        </Link>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-2xl bg-slate-900/40 border border-slate-800/50 overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-800/50">
-            <h2 className="text-lg font-bold text-white">Gastos por categoría</h2>
-          </div>
-          <div className="p-6">
-            {pieData.length > 0 ? (
-              <ExpensePieChart data={pieData} />
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12">
-                <p className="text-slate-500 text-sm">Sin gastos este mes</p>
-                <Link href="/flujo-caja" className="text-xs text-indigo-400 hover:text-indigo-300 mt-2">
-                  Registrar transacciones →
-                </Link>
-              </div>
-            )}
-          </div>
+      {/* Accounts overview */}
+      <div className="rounded-xl border border-ynab-border bg-ynab-surface overflow-hidden">
+        <div className="px-5 py-3 border-b border-ynab-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-white">Accounts</h2>
+          <Link href="/accounts" className="text-xs text-ynab-blue-light hover:underline">View all</Link>
         </div>
-
-        <div className="space-y-4">
-          <div className="rounded-2xl bg-slate-900/40 border border-slate-800/50 p-6">
-            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Próxima deuda ({strategy})</h2>
-            {proximaDeuda ? (
+        <div className="divide-y divide-ynab-border/50">
+          {accounts.map((acc: any) => (
+            <div key={acc.id} className="px-5 py-3 flex items-center justify-between">
               <div>
-                <p className="text-white font-medium">{proximaDeuda.name}</p>
-                <p className="text-xl font-black text-rose-400 mt-1">{formatMoney(proximaDeuda.balance, homeCurrency)}</p>
-                <p className="text-xs text-slate-500 mt-1">APR: {proximaDeuda.apr}%</p>
-                {proximaDeudaExtra > 0 && (
-                  <p className="text-xs text-emerald-400 mt-2">Pago extra sugerido: {formatMoney(proximaDeudaExtra, homeCurrency)}</p>
-                )}
-                <Link href="/deudas" className="text-xs text-indigo-400 hover:text-indigo-300 mt-3 inline-block">
-                  Ver plan completo →
-                </Link>
+                <p className="text-sm text-ynab-text">{acc.name}</p>
+                <p className="text-[10px] text-ynab-text-dim">
+                  {acc.account_type === 'CREDIT' ? 'Credit Card' : 'Checking'} - {acc.currency}
+                </p>
               </div>
-            ) : (
-              <p className="text-slate-500 text-sm italic">Sin deudas activas</p>
-            )}
-          </div>
+              <span className={`text-sm font-semibold tabular-nums ${acc.balance >= 0 ? 'text-white' : 'text-ynab-red'}`}>
+                {acc.balance < 0 ? '-' : ''}{formatMoney(acc.balance)}
+              </span>
+            </div>
+          ))}
+          {accounts.length === 0 && (
+            <div className="px-5 py-6 text-center text-ynab-text-dim text-sm">
+              No accounts yet. <Link href="/accounts" className="text-ynab-blue-light hover:underline">Add one</Link>
+            </div>
+          )}
+        </div>
+      </div>
 
-          <div className="rounded-2xl bg-gradient-to-br from-indigo-600/10 to-cyan-600/10 border border-indigo-500/20 p-6">
-            <h2 className="text-sm font-bold text-indigo-300 uppercase tracking-widest mb-3">Patrimonio neto</h2>
-            <p className={`text-xl font-black ${netWorth >= 0 ? 'text-white' : 'text-rose-400'}`}>
-              {formatMoney(netWorth, homeCurrency)}
-            </p>
-            <p className="text-xs text-indigo-200/50 mt-1">
-              Activos {formatMoney(assetsTotal, homeCurrency)} − Pasivos {formatMoney(totalDeuda, homeCurrency)}
-            </p>
-            <Link href="/patrimonio-neto" className="text-xs text-indigo-400 hover:text-indigo-300 mt-3 inline-block">
-              Ver detalle →
-            </Link>
-          </div>
+      {/* Recent transactions */}
+      <div className="rounded-xl border border-ynab-border bg-ynab-surface overflow-hidden">
+        <div className="px-5 py-3 border-b border-ynab-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-white">Recent Transactions</h2>
+          <Link href="/accounts" className="text-xs text-ynab-blue-light hover:underline">View all</Link>
+        </div>
+        <div className="divide-y divide-ynab-border/50">
+          {last5.map((tx: any) => (
+            <div key={tx.id} className="px-5 py-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-xs text-ynab-text-dim w-12 shrink-0">{formatDate(tx.occurred_at)}</span>
+                <span className="text-sm text-ynab-text truncate">{tx.merchant || tx.description || '—'}</span>
+              </div>
+              <span className={`text-sm font-semibold tabular-nums shrink-0 ml-3 ${
+                tx.flow_type === 'EXPENSE' ? 'text-ynab-red' : 'text-ynab-green'
+              }`}>
+                {tx.flow_type === 'EXPENSE' ? '-' : '+'}{formatMoney(Number(tx.amount_home))}
+              </span>
+            </div>
+          ))}
+          {last5.length === 0 && (
+            <div className="px-5 py-6 text-center text-ynab-text-dim text-sm">No transactions yet</div>
+          )}
         </div>
       </div>
     </div>
