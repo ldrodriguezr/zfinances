@@ -21,10 +21,7 @@ export default async function ControlPanelPage() {
 
   const { data: userData } = await supabase.auth.getUser()
   const user = userData.user
-
-  if (!user) {
-    redirect('/login')
-  }
+  if (!user) redirect('/login')
 
   await ensureUserOnboarding(user.id)
 

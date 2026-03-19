@@ -3,9 +3,9 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export type CreateAssetResult = { success: true } | { success: false; error: string }
+export type ActionResult = { success: true } | { success: false; error: string }
 
-export async function createAsset(formData: FormData): Promise<CreateAssetResult> {
+export async function createAsset(formData: FormData): Promise<ActionResult> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -22,14 +22,8 @@ export async function createAsset(formData: FormData): Promise<CreateAssetResult
     if (purchaseValue <= 0) return { success: false, error: 'Valor de compra requerido' }
 
     const { error } = await supabase.from('assets').insert({
-      user_id: user.id,
-      name,
-      asset_type: assetType,
-      purchase_value: purchaseValue,
-      purchase_date: purchaseDate,
-      depreciation_rate_annual: depRate,
-      residual_value_home: residual,
-      is_active: true,
+      user_id: user.id, name, asset_type: assetType, purchase_value: purchaseValue,
+      purchase_date: purchaseDate, depreciation_rate_annual: depRate, residual_value_home: residual, is_active: true,
     })
 
     if (error) return { success: false, error: error.message }
@@ -38,5 +32,49 @@ export async function createAsset(formData: FormData): Promise<CreateAssetResult
     return { success: true }
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : 'Error al crear activo' }
+  }
+}
+
+export async function updateAsset(params: {
+  id: string
+  name?: string
+  purchaseValue?: number
+  depreciationRateAnnual?: number
+  residualValueHome?: number | null
+}): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'No autorizado' }
+
+    const update: Record<string, any> = {}
+    if (params.name !== undefined) update.name = params.name
+    if (params.purchaseValue !== undefined) update.purchase_value = params.purchaseValue
+    if (params.depreciationRateAnnual !== undefined) update.depreciation_rate_annual = params.depreciationRateAnnual
+    if (params.residualValueHome !== undefined) update.residual_value_home = params.residualValueHome
+
+    const { error } = await supabase.from('assets').update(update).eq('id', params.id).eq('user_id', user.id)
+    if (error) return { success: false, error: error.message }
+    revalidatePath('/patrimonio-neto')
+    revalidatePath('/')
+    return { success: true }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Error al actualizar activo' }
+  }
+}
+
+export async function deleteAsset(id: string): Promise<ActionResult> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'No autorizado' }
+
+    const { error } = await supabase.from('assets').update({ is_active: false }).eq('id', id).eq('user_id', user.id)
+    if (error) return { success: false, error: error.message }
+    revalidatePath('/patrimonio-neto')
+    revalidatePath('/')
+    return { success: true }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Error al eliminar activo' }
   }
 }
