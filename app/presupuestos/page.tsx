@@ -78,7 +78,7 @@ export default async function PresupuestosPage() {
 
           <div className="p-8 rounded-3xl bg-slate-900/40 border border-slate-800">
             <h2 className="text-xl font-bold mb-6">Líneas de presupuesto</h2>
-            {lines?.data && lines.data.length > 0 ? (
+            {lines && lines.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -90,10 +90,10 @@ export default async function PresupuestosPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {lines.data.map((line: any) => {
+                    {lines.map((line: any) => {
                       const catName = categoryMap.get(line.category_level1_id) ?? '—'
                       const pct = Number(line.execution_pct ?? 0)
-                      const alert = alerts?.data?.find((a: any) => a.category_level1_id === line.category_level1_id)
+                      const alert = alerts?.find((a: any) => a.category_level1_id === line.category_level1_id)
                       return (
                         <tr key={line.id} className="border-b border-slate-800/50">
                           <td className="py-3 text-white">{catName}</td>
