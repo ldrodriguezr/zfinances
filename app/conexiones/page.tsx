@@ -2,8 +2,9 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { ensureUserOnboarding } from '@/lib/actions/onboarding'
 import ConectarGmailButton from './ConectarGmailButton'
+import GmailErrorAlert from './GmailErrorAlert'
 
-export default async function ConexionesPage() {
+export default async function ConexionesPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const supabase = await createClient()
 
   const { data: userData } = await supabase.auth.getUser()
@@ -11,6 +12,9 @@ export default async function ConexionesPage() {
   if (!user) redirect('/login')
 
   await ensureUserOnboarding(user.id)
+
+  const params = await searchParams
+  const errorMsg = params.error ? decodeURIComponent(params.error) : null
 
   const { data: gmailConnections } = await supabase
     .from('gmail_connections')
@@ -30,7 +34,8 @@ export default async function ConexionesPage() {
 
       <div className="p-8 rounded-3xl bg-slate-900/40 border border-slate-800">
         <h2 className="text-xl font-bold mb-6">Gmail</h2>
-        <div className="flex flex-col gap-4">
+        {errorMsg && <GmailErrorAlert message={errorMsg} />}
+        <div className="flex flex-col gap-4 mt-4">
           {hasGmailOAuth ? (
             <>
               <ConectarGmailButton />

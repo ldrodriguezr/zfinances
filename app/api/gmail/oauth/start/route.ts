@@ -18,7 +18,7 @@ export async function GET(req: Request) {
       return `${url.origin}/api/gmail/oauth/callback`
     })()
 
-  const scope = process.env.GMAIL_OAUTH_SCOPE ?? 'https://www.googleapis.com/auth/gmail.readonly'
+  const scope = process.env.GMAIL_OAUTH_SCOPE ?? 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email'
   const state = userData.user.id
 
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
