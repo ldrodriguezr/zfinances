@@ -40,7 +40,7 @@ export default function ExpensePieChart({ data }: Props) {
             border: '1px solid rgb(51 65 85)',
             borderRadius: '8px',
           }}
-          formatter={(value: number) => [`₡${value.toLocaleString('es-CR')}`, 'Gasto']}
+          formatter={(value) => [`₡${Number(value ?? 0).toLocaleString('es-CR')}`, 'Gasto']}
         />
         <Legend />
       </PieChart>
