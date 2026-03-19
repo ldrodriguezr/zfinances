@@ -73,9 +73,14 @@ function inferIsDebitLike(textUpper: string) {
   return /\b(CARGO|DEBITO|DEBIT|EGRESO|PAGO)\b/i.test(textUpper)
 }
 
-export async function runGmailIngestion(params?: { maxMessagesPerConnection?: number }) {
+export async function runGmailIngestion(params?: {
+  maxMessagesPerConnection?: number
+  /** Fecha desde la cual buscar (YYYY-MM-DD). Ej: "2025-03-01" para correos desde el 1 de marzo. */
+  afterDate?: string
+}) {
   const supabase = createAdminClient()
-  const maxMessagesPerConnection = params?.maxMessagesPerConnection ?? 25
+  const afterDate = params?.afterDate
+  const maxMessagesPerConnection = params?.maxMessagesPerConnection ?? (afterDate ? 200 : 25)
 
   const { data: connections, error: cErr } = await supabase
     .from('gmail_connections')
@@ -92,7 +97,10 @@ export async function runGmailIngestion(params?: { maxMessagesPerConnection?: nu
     const accessToken = await getAccessTokenFromRefreshToken({ refreshToken: conn.refresh_token as string })
 
     // Pull incremental “simple”: últimos días. Para producción, sincroniza por historyId/labelId.
-    const q = encodeURIComponent('newer_than:14d')
+    const gmailQuery = afterDate
+      ? `after:${afterDate.replace(/-/g, '/')}`
+      : 'newer_than:14d'
+    const q = encodeURIComponent(gmailQuery)
     const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=${maxMessagesPerConnection}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })

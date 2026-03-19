@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { ensureUserOnboarding } from '@/lib/actions/onboarding'
 import ConectarGmailButton from './ConectarGmailButton'
 import GmailErrorAlert from './GmailErrorAlert'
+import BuscarDesdeMarzoButton from './BuscarDesdeMarzoButton'
 
 export default async function ConexionesPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const supabase = await createClient()
@@ -62,9 +63,15 @@ export default async function ConexionesPage({ searchParams }: { searchParams: P
         </div>
 
         {gmailConnections && gmailConnections.length > 0 && (
-          <div className="mt-8 pt-8 border-t border-slate-700">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Cuentas conectadas</h3>
-            <ul className="space-y-2">
+          <div className="mt-8 pt-8 border-t border-slate-700 space-y-6">
+            <div>
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Ingesta manual</h3>
+              <BuscarDesdeMarzoButton />
+              <p className="text-xs text-slate-500 mt-2">Busca correos desde el 1 de marzo y los procesa como transacciones.</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Cuentas conectadas</h3>
+              <ul className="space-y-2">
               {gmailConnections.map((c: any) => (
                 <li key={c.id} className="flex items-center gap-3 text-slate-300">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -74,7 +81,8 @@ export default async function ConexionesPage({ searchParams }: { searchParams: P
                   </span>
                 </li>
               ))}
-            </ul>
+              </ul>
+            </div>
           </div>
         )}
       </div>
