@@ -1,25 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
+import { getSupabaseUrl, getSupabaseServiceRoleKey } from './env-check'
 
 /**
  * Cliente admin (service role) para jobs serverless y cron.
- * - Requiere `SUPABASE_SERVICE_ROLE_KEY` en Vercel.
- * - El service role evita RLS para poder administrar/consultar por `user_id`.
+ * Solo se usa en el servidor (API routes, server actions).
  */
 export function createAdminClient() {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    throw new Error('Falta NEXT_PUBLIC_SUPABASE_URL')
+  const url = getSupabaseUrl()
+  const serviceKey = getSupabaseServiceRoleKey()
+
+  if (!url) {
+    const err = 'Falta NEXT_PUBLIC_SUPABASE_URL'
+    console.error('[Supabase admin]', err)
+    throw new Error(err)
   }
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Falta SUPABASE_SERVICE_ROLE_KEY')
+  if (!serviceKey) {
+    const err = 'Falta SUPABASE_SERVICE_ROLE_KEY'
+    console.error('[Supabase admin]', err)
+    throw new Error(err)
   }
 
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    {
-      db: { schema: 'personal_finance' },
-      auth: { persistSession: false },
-    }
-  )
+  return createClient(url, serviceKey, {
+    db: { schema: 'personal_finance' },
+    auth: { persistSession: false },
+  })
 }
-

@@ -11,7 +11,10 @@ export default function Error({
     <div className="flex min-h-[50vh] flex-col items-center justify-center p-10 text-center">
       <h2 className="text-xl font-bold text-white">Algo salió mal</h2>
       <p className="mt-2 text-slate-400 text-sm max-w-md">
-        Revisa que las variables de entorno en Vercel estén configuradas: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY y SUPABASE_SERVICE_ROLE_KEY.
+        Revisa que las variables de entorno en Vercel estén configuradas: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY y SUPABASE_SERVICE_ROLE_KEY. Nombres exactos, sin espacios.
+      </p>
+      <p className="mt-2 text-slate-500 text-xs">
+        Diagnóstico: visita /api/debug-env para ver qué vars están definidas. Revisa los logs en Vercel → Deployments → Function Logs.
       </p>
       <button
         onClick={reset}

@@ -1,34 +1,42 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { getSupabaseUrl, getSupabaseAnonKey, checkSupabaseEnv } from './env-check'
 
-// Añadimos "async" para que sea una función asíncrona
 export async function createClient() {
-  const cookieStore = await cookies() // 🚨 CRÍTICO: Esperamos a que las cookies carguen
+  const { ok, missing } = checkSupabaseEnv('client')
+  if (!ok) {
+    console.error('[Supabase server] Missing env vars:', missing.join(', '))
+    throw new Error(`Supabase: faltan variables de entorno: ${missing.join(', ')}. Revisa Vercel → Settings → Environment Variables.`)
+  }
 
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options })
-          } catch (error) {
-            // Se ignora en Server Components
-          }
-        },
-        remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: '', ...options })
-          } catch (error) {}
-        },
+  const url = getSupabaseUrl()
+  const anonKey = getSupabaseAnonKey()
+  if (!url || !anonKey) {
+    throw new Error('Supabase: URL o ANON_KEY vacíos tras validación.')
+  }
+
+  const cookieStore = await cookies()
+
+  return createServerClient(url, anonKey, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value
       },
-      db: {
-        schema: 'personal_finance',
+      set(name: string, value: string, options: CookieOptions) {
+        try {
+          cookieStore.set({ name, value, ...options })
+        } catch {
+          // Ignorado en Server Components
+        }
       },
-    }
-  )
+      remove(name: string, options: CookieOptions) {
+        try {
+          cookieStore.set({ name, value: '', ...options })
+        } catch {}
+      },
+    },
+    db: {
+      schema: 'personal_finance',
+    },
+  })
 }

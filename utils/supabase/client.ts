@@ -1,15 +1,20 @@
 import { createBrowserClient } from '@supabase/ssr'
 
-// 🚨 No olvides el "export" al principio
+/**
+ * Cliente para componentes del navegador.
+ * Solo usa NEXT_PUBLIC_* (incluidos en el bundle en build).
+ */
 export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      // 🎯 Esto es lo que nos mantiene en la "habitación" de finanzas
-      db: {
-        schema: 'personal_finance',
-      },
-    }
-  )
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!url || !anonKey) {
+    console.error('[Supabase client] Missing: NEXT_PUBLIC_SUPABASE_URL=', !!url, 'NEXT_PUBLIC_SUPABASE_ANON_KEY=', !!anonKey)
+  }
+
+  return createBrowserClient(url || '', anonKey || '', {
+    db: {
+      schema: 'personal_finance',
+    },
+  })
 }
