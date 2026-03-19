@@ -27,7 +27,7 @@ export async function createBudgetForMonth(monthStartYMD: string): Promise<Creat
       .eq('user_id', userId)
       .eq('level', 1)
 
-    if (!categories?.length) return { success: false, error: 'Crea categorías primero (Flujo de Caja usa el seed)' }
+    if (!categories?.length) return { success: false, error: 'Crea categorías primero' }
 
     const { data: budget, error: budgetErr } = await supabase
       .from('monthly_budgets')
@@ -59,5 +59,25 @@ export async function createBudgetForMonth(monthStartYMD: string): Promise<Creat
     return { success: true }
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : 'Error al crear presupuesto' }
+  }
+}
+
+export async function updateBudgetLineAmount(lineId: string, amount: number): Promise<CreateBudgetResult> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: 'No autorizado' }
+
+    const { error } = await supabase
+      .from('budget_lines')
+      .update({ budget_amount_home: Math.abs(amount) })
+      .eq('id', lineId)
+      .eq('user_id', user.id)
+
+    if (error) return { success: false, error: error.message }
+    revalidatePath('/presupuestos')
+    return { success: true }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Error al actualizar' }
   }
 }

@@ -1,4 +1,3 @@
-// components/modules/TransactionForm.tsx
 'use client'
 
 import { useMemo, useRef, useState, useTransition } from 'react'
@@ -41,86 +40,99 @@ export default function TransactionForm({ accounts, categories }: Props) {
       const res = await createTransaction(formData)
       if (res.success) {
         formRef.current?.reset()
+        setSelectedCategoryLevel1('')
+        setSelectedCategoryLevel2('')
       } else {
         alert(res.error)
       }
     })
   }
 
+  const inputCls = 'w-full rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 outline-none transition-colors'
+
   return (
-    <form ref={formRef} action={handleSubmit} className="space-y-5">
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">Tipo de Flujo</label>
-        <select
-          required
-          name="flow_type"
-          defaultValue="EXPENSE"
-          value={selectedFlowType}
-          onChange={(e) => setSelectedFlowType(e.target.value as 'EXPENSE' | 'INCOME' | 'TRANSFER')}
-          className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white"
-        >
-          <option value="EXPENSE">Gasto (sale dinero)</option>
-          <option value="INCOME">Ingreso (entra dinero)</option>
-          <option value="TRANSFER">Transferencia (base)</option>
-        </select>
+    <form ref={formRef} action={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Flujo</label>
+          <select
+            required
+            name="flow_type"
+            value={selectedFlowType}
+            onChange={(e) => setSelectedFlowType(e.target.value as 'EXPENSE' | 'INCOME' | 'TRANSFER')}
+            className={inputCls}
+          >
+            <option value="EXPENSE">Gasto</option>
+            <option value="INCOME">Ingreso</option>
+            <option value="TRANSFER">Transferencia</option>
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Moneda</label>
+          <select
+            required
+            name="currency"
+            value={selectedCurrency}
+            onChange={(e) => setSelectedCurrency(e.target.value as 'CRC' | 'USD')}
+            className={inputCls}
+          >
+            <option value="CRC">₡ CRC</option>
+            <option value="USD">$ USD</option>
+          </select>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">Moneda</label>
-        <select
-          required
-          name="currency"
-          value={selectedCurrency}
-          onChange={(e) => setSelectedCurrency(e.target.value as 'CRC' | 'USD')}
-          className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white"
-        >
-          <option value="CRC">CRC (Colones)</option>
-          <option value="USD">USD (Dólares)</option>
-        </select>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Cuenta</label>
+        {filteredAccounts.length > 0 ? (
+          <select required name="account_id" className={inputCls}>
+            <option value="">Selecciona cuenta...</option>
+            {filteredAccounts.map((acc) => (
+              <option key={acc.id} value={acc.id}>
+                {acc.name} ({acc.account_type === 'CREDIT' ? 'Crédito' : 'Liquidez'})
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="rounded-lg border border-dashed border-amber-600/50 bg-amber-900/10 px-3 py-2.5 text-sm">
+            <p className="text-amber-400">No hay cuentas en {selectedCurrency}.</p>
+            <p className="text-xs text-amber-500/70 mt-1">
+              Ve a configuración o recarga la app para que se creen automáticamente.
+            </p>
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">
-          Cuenta de Origen {selectedFlowType === 'EXPENSE' ? '(Liquidez o Tarjeta)' : '(Liquidez)'}
-        </label>
-        <select required name="account_id" className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white">
-          <option value="">Selecciona cuenta...</option>
-          {filteredAccounts.map((acc) => (
-            <option key={acc.id} value={acc.id}>
-              {acc.name}
-            </option>
-          ))}
-        </select>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Monto</label>
+          <input required name="amount" type="number" step="0.01" min="0" placeholder="0.00" className={inputCls} />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Fecha</label>
+          <input
+            required
+            name="date"
+            type="date"
+            className={inputCls}
+            defaultValue={new Date().toISOString().slice(0, 10)}
+          />
+        </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">Monto</label>
-        <input required name="amount" type="number" step="0.01" min="0" className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white" />
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Descripción</label>
+        <input name="description" type="text" placeholder="Ej: Almuerzo con equipo" className={inputCls} />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">Fecha</label>
-        <input
-          required
-          name="date"
-          type="date"
-          className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white"
-          defaultValue={new Date().toISOString().slice(0, 10)}
-        />
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Comercio (opcional)</label>
+        <input name="merchant" type="text" placeholder="Ej: Walmart, Uber" className={inputCls} />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">Descripción</label>
-        <input name="description" type="text" className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white" />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">Comercio / Beneficiario (opcional)</label>
-        <input name="merchant" type="text" className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white" />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">Categoría (Nivel 1)</label>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Categoría</label>
         <select
           name="category_level1_id"
           value={selectedCategoryLevel1}
@@ -128,55 +140,51 @@ export default function TransactionForm({ accounts, categories }: Props) {
             setSelectedCategoryLevel1(e.target.value)
             setSelectedCategoryLevel2('')
           }}
-          className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white"
+          className={inputCls}
         >
-          <option value="">Selecciona categoría...</option>
+          <option value="">Sin categoría</option>
           {level1Categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
           ))}
         </select>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">Subcategoría (Nivel 2) (opcional)</label>
-        <select
-          name="category_level2_id"
-          value={selectedCategoryLevel2}
-          onChange={(e) => setSelectedCategoryLevel2(e.target.value)}
-          className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white"
-        >
-          <option value="">Selecciona subcategoría...</option>
-          {level2Categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {level2Categories.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Subcategoría</label>
+          <select
+            name="category_level2_id"
+            value={selectedCategoryLevel2}
+            onChange={(e) => setSelectedCategoryLevel2(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">General</option>
+            {level2Categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">Etiqueta/Tag (Nivel 3) (opcional)</label>
-        <select name="tag_level3_id" className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white">
-          <option value="">Sin tag</option>
-          {level3Tags.map((tag) => (
-            <option key={tag.id} value={tag.id}>
-              {tag.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {level3Tags.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tag</label>
+          <select name="tag_level3_id" className={inputCls}>
+            <option value="">Sin tag</option>
+            {level3Tags.map((tag) => (
+              <option key={tag.id} value={tag.id}>{tag.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      <div className="pt-2">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="w-full rounded-xl bg-indigo-500/90 text-white py-2.5 text-xs font-bold uppercase tracking-widest disabled:opacity-60"
-        >
-          {isPending ? 'Procesando...' : 'Crear Asiento'}
-        </button>
-      </div>
+      <button
+        type="submit"
+        disabled={isPending || filteredAccounts.length === 0}
+        className="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 text-white py-2.5 text-xs font-bold uppercase tracking-widest hover:from-indigo-600 hover:to-cyan-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-500/20"
+      >
+        {isPending ? 'Procesando...' : 'Registrar'}
+      </button>
     </form>
   )
 }

@@ -3,31 +3,88 @@
 import { createClient } from '@/utils/supabase/server'
 
 const SEED_ACCOUNTS = [
-  { name: 'Efectivo Principal', account_type: 'LIQUIDITY', currency: 'CRC' },
-  { name: 'SINPE Móvil', account_type: 'LIQUIDITY', currency: 'CRC' },
-  { name: 'TC Master BAC', account_type: 'CREDIT', currency: 'CRC' },
-  { name: 'TC AMEX Scotiabank', account_type: 'CREDIT', currency: 'USD' },
+  { name: 'Efectivo CRC', account_type: 'LIQUIDITY', currency: 'CRC' },
+  { name: 'BAC CRC', account_type: 'LIQUIDITY', currency: 'CRC' },
+  { name: 'SINPE CRC', account_type: 'LIQUIDITY', currency: 'CRC' },
+  { name: 'AMEX USD', account_type: 'CREDIT', currency: 'USD' },
 ] as const
 
-const SEED_CATEGORIES = [
-  'Vivienda (Renta/Hipoteca)',
-  'Servicios Públicos (Agua, Luz, Internet)',
-  'Supermercado (Comida casa)',
-  'Restaurantes (Comida fuera)',
-  'Transporte (Gasolina, Uber, Bus)',
-  'Salud (Farmacia, Citas médicas)',
-  'Entretenimiento (Cine, Suscripciones)',
-  'Educación (Cursos, Libros)',
-  'Compras (Ropa, Tecnología)',
-  'Finanzas (Pago tarjetas, Intereses, Comisiones)',
-] as const
+const SEED_CATEGORIES: Array<{
+  name: string
+  kind: 'EXPENSE' | 'INCOME'
+  children?: string[]
+}> = [
+  {
+    name: 'Vivienda',
+    kind: 'EXPENSE',
+    children: ['Renta/Hipoteca', 'Mantenimiento hogar', 'Seguros hogar'],
+  },
+  {
+    name: 'Servicios Públicos',
+    kind: 'EXPENSE',
+    children: ['Agua', 'Electricidad', 'Internet/Cable', 'Telefonía'],
+  },
+  {
+    name: 'Supermercado',
+    kind: 'EXPENSE',
+    children: ['Comida casa', 'Limpieza', 'Productos personales'],
+  },
+  {
+    name: 'Restaurantes',
+    kind: 'EXPENSE',
+    children: ['Comida fuera', 'Delivery', 'Cafetería'],
+  },
+  {
+    name: 'Transporte',
+    kind: 'EXPENSE',
+    children: ['Gasolina', 'Uber/DiDi', 'Bus/Tren', 'Parqueo', 'Mantenimiento vehículo'],
+  },
+  {
+    name: 'Salud',
+    kind: 'EXPENSE',
+    children: ['Farmacia', 'Citas médicas', 'Seguro médico', 'Dental/Óptica'],
+  },
+  {
+    name: 'Entretenimiento',
+    kind: 'EXPENSE',
+    children: ['Cine/Teatro', 'Suscripciones', 'Viajes/Vacaciones', 'Hobbies'],
+  },
+  {
+    name: 'Educación',
+    kind: 'EXPENSE',
+    children: ['Cursos', 'Libros', 'Materiales', 'Matrícula'],
+  },
+  {
+    name: 'Compras',
+    kind: 'EXPENSE',
+    children: ['Ropa/Calzado', 'Tecnología', 'Electrodomésticos'],
+  },
+  {
+    name: 'Finanzas',
+    kind: 'EXPENSE',
+    children: ['Pago tarjetas', 'Intereses', 'Comisiones bancarias', 'Seguros'],
+  },
+  {
+    name: 'Impuestos',
+    kind: 'EXPENSE',
+    children: ['Renta', 'Marchamo', 'Municipalidad'],
+  },
+  {
+    name: 'Mascotas',
+    kind: 'EXPENSE',
+    children: ['Veterinario', 'Comida mascota', 'Accesorios'],
+  },
+  {
+    name: 'Ingresos',
+    kind: 'INCOME',
+    children: ['Salario', 'Freelance', 'Inversiones', 'Otros ingresos'],
+  },
+]
 
-/**
- * Siembra datos maestros si el usuario no tiene. Se ejecuta al entrar al Panel de Control.
- */
 export async function ensureUserSeed(userId: string) {
   const supabase = await createClient()
 
+  // --- Accounts ---
   const { data: existingAccounts } = await supabase
     .from('accounts')
     .select('id, name')
@@ -37,36 +94,65 @@ export async function ensureUserSeed(userId: string) {
 
   for (const acc of SEED_ACCOUNTS) {
     if (existingNames.has(acc.name)) continue
-    const { error: accErr } = await supabase.from('accounts').insert({
+    await supabase.from('accounts').insert({
       user_id: userId,
       name: acc.name,
       account_type: acc.account_type,
       currency: acc.currency,
       is_active: true,
     })
-    if (accErr) throw accErr
     existingNames.add(acc.name)
   }
 
-  const { data: existingCategories } = await supabase
+  // --- Categories (multinivel) ---
+  const { data: existingCats } = await supabase
     .from('categories')
-    .select('id, name')
+    .select('id, name, level')
     .eq('user_id', userId)
-    .eq('level', 1)
 
-  const existingCatNames = new Set((existingCategories ?? []).map((c) => c.name))
+  const existingL1Names = new Set(
+    (existingCats ?? []).filter((c) => c.level === 1).map((c) => c.name)
+  )
 
-  for (const name of SEED_CATEGORIES) {
-    if (existingCatNames.has(name)) continue
-    const { error: catErr } = await supabase.from('categories').insert({
-      user_id: userId,
-      name,
-      level: 1,
-      parent_category_id: null,
-      category_kind: 'EXPENSE',
-    })
-    if (catErr) throw catErr
-    existingCatNames.add(name)
+  for (const cat of SEED_CATEGORIES) {
+    let parentId: string | null = null
+
+    if (!existingL1Names.has(cat.name)) {
+      const { data: inserted } = await supabase
+        .from('categories')
+        .insert({
+          user_id: userId,
+          name: cat.name,
+          level: 1,
+          parent_category_id: null,
+          category_kind: cat.kind,
+        })
+        .select('id')
+        .single()
+      parentId = inserted?.id ?? null
+      existingL1Names.add(cat.name)
+    } else {
+      const found = (existingCats ?? []).find((c) => c.name === cat.name && c.level === 1)
+      parentId = found?.id ?? null
+    }
+
+    if (parentId && cat.children?.length) {
+      const existingL2Names = new Set(
+        (existingCats ?? [])
+          .filter((c) => c.level === 2)
+          .map((c) => c.name)
+      )
+      for (const childName of cat.children) {
+        if (existingL2Names.has(childName)) continue
+        await supabase.from('categories').insert({
+          user_id: userId,
+          name: childName,
+          level: 2,
+          parent_category_id: parentId,
+          category_kind: cat.kind,
+        })
+      }
+    }
   }
 
   return { ok: true }
