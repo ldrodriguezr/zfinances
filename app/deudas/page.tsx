@@ -61,12 +61,19 @@ export default async function DeudasPage() {
   const expense = (expenseRes.data ?? []).reduce((acc: number, r: any) => acc + Number(r.amount_home ?? 0), 0)
   const surplus = income - expense
 
-  const plan = surplus > 0 ? await planExtraPaymentsToDebts({
-    userId: user.id,
-    surplusHome: surplus,
-    strategy,
-    asOfISO: now.toISOString(),
-  }) : []
+  let plan: Array<{ debtId: string; amountHome: number }> = []
+  if (surplus > 0) {
+    try {
+      plan = await planExtraPaymentsToDebts({
+        userId: user.id,
+        surplusHome: surplus,
+        strategy,
+        asOfISO: now.toISOString(),
+      })
+    } catch {
+      plan = []
+    }
+  }
 
   const planMap = new Map(plan.map((p) => [p.debtId, p.amountHome]))
 

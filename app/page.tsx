@@ -101,15 +101,19 @@ export default async function ControlPanelPage() {
   const proximaDeuda = orderedDebts.find((d) => d.balance > 0)
 
   const surplus = incomeHome - expenseHome
-  const plan =
-    surplus > 0
-      ? await planExtraPaymentsToDebts({
-          userId: user.id,
-          surplusHome: surplus,
-          strategy,
-          asOfISO: now.toISOString(),
-        })
-      : []
+  let plan: Array<{ debtId: string; amountHome: number }> = []
+  if (surplus > 0) {
+    try {
+      plan = await planExtraPaymentsToDebts({
+        userId: user.id,
+        surplusHome: surplus,
+        strategy,
+        asOfISO: now.toISOString(),
+      })
+    } catch {
+      plan = []
+    }
+  }
   const proximaDeudaExtra = proximaDeuda ? plan.find((p) => p.debtId === proximaDeuda.id)?.amountHome ?? 0 : 0
 
   let assetsTotal = 0
