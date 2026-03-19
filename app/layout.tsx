@@ -36,14 +36,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </Link>
 
               <div className="px-4 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-6">Estrategia</div>
-              <a href="#" className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-all text-slate-400 hover:text-white group italic opacity-50">
+              <Link
+                href="/flujo-caja"
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-all text-slate-400 hover:text-white group italic opacity-50"
+              >
                 <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
                 Snowball (Pronto)
-              </a>
-              <a href="#" className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-all text-slate-400 hover:text-white group italic opacity-50">
+              </Link>
+              <Link
+                href="/"
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 transition-all text-slate-400 hover:text-white group italic opacity-50"
+              >
                 <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
                 Patrimonio Neto
-              </a>
+              </Link>
             </nav>
 
             <div className="p-6 border-t border-slate-800/50 bg-slate-900/20">

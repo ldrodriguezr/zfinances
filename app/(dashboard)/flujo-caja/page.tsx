@@ -1,9 +1,13 @@
 import { createClient } from '@/utils/supabase/server'
 import TransactionForm from '@/components/modules/TransactionForm'
+import { redirect } from 'next/navigation'
 
 export default async function CashFlowPage() {
   const supabase = await createClient()
   
+  const { data: userData } = await supabase.auth.getUser()
+  if (!userData.user) redirect('/login')
+
   const { data: accounts } = await supabase.from('accounts').select('id, name, currency, account_type')
   const { data: categories } = await supabase
     .from('categories')

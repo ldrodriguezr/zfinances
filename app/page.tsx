@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server'
+import { redirect } from 'next/navigation'
 
 function symbolForCurrency(code: string) {
   if (code === 'USD') return '$'
@@ -19,14 +20,7 @@ export default async function ControlPanelPage() {
   const user = userData.user
 
   if (!user) {
-    return (
-      <div className="p-10 max-w-3xl mx-auto space-y-6 animate-in fade-in duration-700">
-        <h1 className="text-3xl font-extrabold tracking-tight text-white">Panel de Control</h1>
-        <div className="p-8 rounded-3xl bg-slate-900/40 border border-slate-800 shadow-2xl">
-          <p className="text-slate-300">Inicia sesión para ver tu saldo, ingresos y gastos.</p>
-        </div>
-      </div>
-    )
+    redirect('/login')
   }
 
   const { data: settings } = await supabase
