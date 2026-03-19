@@ -28,14 +28,20 @@ export default async function CashFlowPage() {
 
   await ensureUserOnboarding(user.id)
 
-  const { data: accounts } = await supabase.from('accounts').select('id, name, currency, account_type')
+  const { data: accounts } = await supabase
+    .from('accounts')
+    .select('id, name, currency, account_type')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
   const { data: categories } = await supabase
     .from('categories')
     .select('id, name, level, parent_category_id')
+    .eq('user_id', user.id)
 
   const { data: transactions } = await supabase
     .from('transactions')
     .select('id, occurred_at, description, merchant, amount_home, currency, flow_type')
+    .eq('user_id', user.id)
     .order('occurred_at', { ascending: false })
     .limit(50)
 

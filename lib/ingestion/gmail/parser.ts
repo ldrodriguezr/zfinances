@@ -10,7 +10,7 @@ export type ParsedTransaction = {
   parseConfidence: number // 0..100
 }
 
-const MONTH_KEYWORDS = ['FECHA', 'DATE', 'COMPROBANTE', 'TRANSACTION', 'MOVIMIENTO']
+const MONTH_KEYWORDS = ['FECHA', 'DATE', 'COMPROBANTE', 'TRANSACTION', 'MOVIMIENTO', 'SINPE', 'BAC']
 
 function decodeBasicHtmlEntities(input: string) {
   // Decodificación mínima para montos/fechas; los bancos suelen usar `&nbsp;` y entidades comunes.
@@ -112,6 +112,8 @@ function extractOccurredAt(text: string): { occurredAtIso?: string; confidence: 
 function inferCurrency(textUpper: string) {
   if (/\b(USD|US\$)\b/.test(textUpper) || /US\s*dollar/i.test(textUpper)) return 'USD'
   if (/\b(CRC|COL|COLONES)\b/.test(textUpper) || /₡/.test(textUpper)) return 'CRC'
+  // BAC y SINPE en Costa Rica usan colones por defecto
+  if (/\b(BAC|SINPE)\b/.test(textUpper)) return 'CRC'
   return undefined
 }
 
@@ -165,6 +167,7 @@ function scoreAmountCandidate(nearUpper: string, currency?: string) {
   if (currency && nearUpper.includes(currency)) score += 25
   if (/\b(TOTAL|MONTO|IMPORTE|AMOUNT|NETO)\b/i.test(nearUpper)) score += 25
   if (/\b(REFERENCIA|FOLIO|COMPROBANTE)\b/i.test(nearUpper)) score += 5
+  if (/\b(SINPE|BAC|TRANSACCION|PAGO|TRANSFERENCIA)\b/i.test(nearUpper)) score += 15
   return score
 }
 

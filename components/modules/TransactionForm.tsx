@@ -14,12 +14,17 @@ export default function TransactionForm({ accounts, categories }: Props) {
   const formRef = useRef<HTMLFormElement>(null)
 
   const [selectedCurrency, setSelectedCurrency] = useState<'CRC' | 'USD'>('CRC')
+  const [selectedFlowType, setSelectedFlowType] = useState<'EXPENSE' | 'INCOME' | 'TRANSFER'>('EXPENSE')
   const [selectedCategoryLevel1, setSelectedCategoryLevel1] = useState<string>('')
   const [selectedCategoryLevel2, setSelectedCategoryLevel2] = useState<string>('')
 
   const filteredAccounts = useMemo(() => {
-    return accounts.filter((a) => a.account_type === 'LIQUIDITY' && a.currency === selectedCurrency)
-  }, [accounts, selectedCurrency])
+    const byCurrency = accounts.filter((a) => a.currency === selectedCurrency)
+    if (selectedFlowType === 'EXPENSE') {
+      return byCurrency.filter((a) => a.account_type === 'LIQUIDITY' || a.account_type === 'CREDIT')
+    }
+    return byCurrency.filter((a) => a.account_type === 'LIQUIDITY')
+  }, [accounts, selectedCurrency, selectedFlowType])
 
   const level1Categories = useMemo(() => categories.filter((c) => c.level === 1), [categories])
   const level2Categories = useMemo(
@@ -46,7 +51,14 @@ export default function TransactionForm({ accounts, categories }: Props) {
     <form ref={formRef} action={handleSubmit} className="space-y-5">
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-slate-300">Tipo de Flujo</label>
-        <select required name="flow_type" defaultValue="EXPENSE" className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white">
+        <select
+          required
+          name="flow_type"
+          defaultValue="EXPENSE"
+          value={selectedFlowType}
+          onChange={(e) => setSelectedFlowType(e.target.value as 'EXPENSE' | 'INCOME' | 'TRANSFER')}
+          className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white"
+        >
           <option value="EXPENSE">Gasto (sale dinero)</option>
           <option value="INCOME">Ingreso (entra dinero)</option>
           <option value="TRANSFER">Transferencia (base)</option>
@@ -68,7 +80,9 @@ export default function TransactionForm({ accounts, categories }: Props) {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-300">Cuenta de Origen (Liquidez)</label>
+        <label className="text-sm font-medium text-slate-300">
+          Cuenta de Origen {selectedFlowType === 'EXPENSE' ? '(Liquidez o Tarjeta)' : '(Liquidez)'}
+        </label>
         <select required name="account_id" className="rounded-lg border border-slate-700 bg-slate-900/50 px-3 py-2.5 text-white">
           <option value="">Selecciona cuenta...</option>
           {filteredAccounts.map((acc) => (

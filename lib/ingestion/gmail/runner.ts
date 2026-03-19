@@ -90,23 +90,43 @@ export async function runGmailIngestion(params?: {
 
   if (cErr) throw cErr
 
-  if (!connections?.length) return { processedConnections: 0 }
+  if (!connections?.length) return { processedConnections: 0, stats: { messagesFound: 0, processed: 0, skippedLowConfidence: 0, skippedAlready: 0 } }
+
+  const stats = { messagesFound: 0, processed: 0, skippedLowConfidence: 0, skippedAlready: 0 }
 
   for (const conn of connections) {
     const userId = conn.user_id as string
     const accessToken = await getAccessTokenFromRefreshToken({ refreshToken: conn.refresh_token as string })
 
     // Pull incremental “simple”: últimos días. Para producción, sincroniza por historyId/labelId.
-    const gmailQuery = afterDate
+    const datePart = afterDate
       ? `after:${afterDate.replace(/-/g, '/')}`
       : 'newer_than:14d'
-    const q = encodeURIComponent(gmailQuery)
-    const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=${maxMessagesPerConnection}`, {
+    const bankingTerms = afterDate
+      ? ' (bac OR sinpe OR comprobante OR transaccion OR transferencia OR notificacion OR "estado de cuenta" OR movimiento)'
+      : ''
+    let gmailQuery = datePart + bankingTerms
+    let q = encodeURIComponent(gmailQuery)
+    let listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=${maxMessagesPerConnection}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
+    let listJson: any = {}
+    if (listRes.ok) listJson = await listRes.json()
+    let messageIds: string[] = (listJson.messages ?? []).map((m: any) => String(m.id)).filter(Boolean)
+    // Si la búsqueda con términos bancarios no devuelve nada, intentar solo por fecha
+    if (afterDate && messageIds.length === 0) {
+      gmailQuery = datePart
+      q = encodeURIComponent(gmailQuery)
+      listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=${maxMessagesPerConnection}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      if (listRes.ok) {
+        listJson = await listRes.json()
+        messageIds = (listJson.messages ?? []).map((m: any) => String(m.id)).filter(Boolean)
+      }
+    }
     if (!listRes.ok) continue
-    const listJson = (await listRes.json()) as any
-    const messageIds: string[] = (listJson.messages ?? []).map((m: any) => String(m.id)).filter(Boolean)
+    stats.messagesFound += messageIds.length
     if (!messageIds.length) continue
 
     for (const gmailMessageId of messageIds) {
@@ -118,7 +138,10 @@ export async function runGmailIngestion(params?: {
         .eq('gmail_message_id', gmailMessageId)
         .maybeSingle()
 
-      if (existing?.extraction_status && existing.extraction_status !== 'PENDING') continue
+      if (existing?.extraction_status && existing.extraction_status !== 'PENDING') {
+        stats.skippedAlready++
+        continue
+      }
 
       // Detail
       const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${gmailMessageId}?format=full`, {
@@ -166,8 +189,12 @@ export async function runGmailIngestion(params?: {
 
       if (gmErr) continue
 
-      if (parser.parseConfidence < 50) continue
+      if (parser.parseConfidence < 50) {
+        stats.skippedLowConfidence++
+        continue
+      }
 
+      stats.processed++
       try {
         const { transactionId } = await postIngestedTransactionToLedger({
           userId,
@@ -225,6 +252,6 @@ export async function runGmailIngestion(params?: {
     }
   }
 
-  return { ok: true }
+  return { ok: true, stats }
 }
 

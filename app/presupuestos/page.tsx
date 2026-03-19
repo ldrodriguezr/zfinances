@@ -34,7 +34,7 @@ export default async function PresupuestosPage() {
         .eq('budget_id', budget.id)
     : { data: [] }
 
-  const { data: categories } = await supabase.from('categories').select('id, name').eq('level', 1)
+  const { data: categories } = await supabase.from('categories').select('id, name').eq('user_id', user.id).eq('level', 1)
 
   const categoryMap = new Map((categories ?? []).map((c) => [c.id, c.name]))
 
