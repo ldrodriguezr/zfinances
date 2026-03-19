@@ -36,6 +36,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 Flujo de Caja
               </Link>
+              <Link
+                href="/presupuestos"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800/60 text-slate-300 hover:text-white transition-colors"
+              >
+                Presupuestos (ZBB)
+              </Link>
+              <Link
+                href="/deudas"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800/60 text-slate-300 hover:text-white transition-colors"
+              >
+                Deudas (Snowball)
+              </Link>
+              <Link
+                href="/patrimonio-neto"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800/60 text-slate-300 hover:text-white transition-colors"
+              >
+                Patrimonio Neto
+              </Link>
+              <Link
+                href="/conexiones"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800/60 text-slate-300 hover:text-white transition-colors"
+              >
+                Conexiones (Gmail)
+              </Link>
             </nav>
           </aside>
 
