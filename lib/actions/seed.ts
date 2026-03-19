@@ -92,7 +92,7 @@ export async function ensureUserSeed(userId: string) {
     .eq('user_id', userId)
 
   const existingNames = new Set((existingAccounts ?? []).map((a) => a.name))
-  const seedNames = new Set(SEED_ACCOUNTS.map((a) => a.name))
+  const seedNames: Set<string> = new Set(SEED_ACCOUNTS.map((a) => a.name))
 
   // Desactivar cuentas viejas del seed anterior que ya no están en la lista
   const oldSeedNames = ['Efectivo CRC', 'BAC CRC', 'SINPE CRC', 'AMEX USD', 'Efectivo Principal', 'SINPE Móvil', 'TC Master BAC', 'TC AMEX Scotiabank', 'Efectivo/Principal']
