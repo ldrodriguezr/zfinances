@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { ensureUserOnboarding } from '@/lib/actions/onboarding'
+import CrearPresupuestoButton from '@/components/modules/CrearPresupuestoButton'
 
 function formatMoney(amount: number) {
   return `₡${Number(amount).toLocaleString('es-CR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
@@ -137,9 +138,13 @@ export default async function PresupuestosPage() {
         </>
       ) : (
         <div className="p-8 rounded-3xl bg-slate-900/40 border border-slate-800 border-dashed">
-          <p className="text-slate-500 italic">
-            No hay presupuesto para {monthStart.toLocaleDateString('es-CR', { month: 'long', year: 'numeric' })}. El cron de budget o la creación manual generará uno.
+          <p className="text-slate-500 italic mb-4">
+            No hay presupuesto para {monthStart.toLocaleDateString('es-CR', { month: 'long', year: 'numeric' })}.
           </p>
+          <CrearPresupuestoButton
+            monthStartYMD={monthStartYMD}
+            monthLabel={monthStart.toLocaleDateString('es-CR', { month: 'long', year: 'numeric' })}
+          />
         </div>
       )}
     </div>

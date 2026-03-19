@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { ensureUserOnboarding } from '@/lib/actions/onboarding'
 import { planExtraPaymentsToDebts } from '@/lib/debt/debt'
+import AgregarDeudaButton from '@/components/modules/AgregarDeudaButton'
 
 function formatMoney(amount: number, currency: string = 'CRC') {
   const sym = currency === 'USD' ? '$' : '₡'
@@ -84,6 +85,7 @@ export default async function DeudasPage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-white">Deudas (Snowball)</h1>
           <p className="text-slate-400 mt-1">Estrategia: {strategy}. Próximos pagos extra según surplus.</p>
         </div>
+        <AgregarDeudaButton />
       </header>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">

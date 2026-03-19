@@ -108,7 +108,6 @@ export default function TransactionForm({ accounts, categories }: Props) {
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-slate-300">Categoría (Nivel 1)</label>
         <select
-          required
           name="category_level1_id"
           value={selectedCategoryLevel1}
           onChange={(e) => {
