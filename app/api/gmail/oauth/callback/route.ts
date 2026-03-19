@@ -1,32 +1,46 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 
-function redirectError(reqUrl: string, msg: string) {
-  const origin = new URL(reqUrl).origin
-  const url = new URL('/conexiones', origin)
+function getBaseUrl(req: Request): string {
+  try {
+    const url = new URL(req.url)
+    if (url.origin && url.origin !== 'null') return url.origin
+  } catch {}
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? ''
+  const proto = req.headers.get('x-forwarded-proto') ?? 'https'
+  if (host) return `${proto}://${host}`
+  const vercel = process.env.VERCEL_URL
+  if (vercel) return `https://${vercel}`
+  return 'https://zfinances.vercel.app'
+}
+
+function redirectError(req: Request, msg: string) {
+  const base = getBaseUrl(req)
+  const url = new URL('/conexiones', base)
   url.searchParams.set('error', encodeURIComponent(msg))
   return NextResponse.redirect(url.toString())
 }
 
-function redirectSuccess() {
-  const successUrl = process.env.GMAIL_OAUTH_SUCCESS_URL ?? '/conexiones'
-  return NextResponse.redirect(successUrl)
+function redirectSuccess(req: Request) {
+  const base = getBaseUrl(req)
+  const successPath = process.env.GMAIL_OAUTH_SUCCESS_URL ?? '/conexiones'
+  const url = successPath.startsWith('http') ? successPath : new URL(successPath, base).toString()
+  return NextResponse.redirect(url)
 }
 
 export async function GET(req: Request) {
-  const reqUrl = req.url
   try {
-    const url = new URL(reqUrl)
+    const url = new URL(req.url, getBaseUrl(req))
     const code = url.searchParams.get('code')
     const state = url.searchParams.get('state')
-    if (!code || !state) return redirectError(reqUrl, 'Faltan parámetros de Google. Intenta de nuevo.')
+    if (!code || !state) return redirectError(req, 'Faltan parámetros de Google. Intenta de nuevo.')
 
     const clientId = process.env.GMAIL_OAUTH_CLIENT_ID
     const clientSecret = process.env.GMAIL_OAUTH_CLIENT_SECRET
-    if (!clientId || !clientSecret) return redirectError(reqUrl, 'Faltan variables GMAIL_OAUTH en Vercel.')
+    if (!clientId || !clientSecret) return redirectError(req, 'Faltan variables GMAIL_OAUTH en Vercel.')
 
     const redirectUri =
-      process.env.GMAIL_OAUTH_REDIRECT_URI ?? `${url.origin}/api/gmail/oauth/callback`
+      process.env.GMAIL_OAUTH_REDIRECT_URI ?? `${getBaseUrl(req)}/api/gmail/oauth/callback`
 
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -43,7 +57,7 @@ export async function GET(req: Request) {
     if (!tokenRes.ok) {
       const text = await tokenRes.text().catch(() => '')
       console.error('[Gmail OAuth] token exchange failed:', tokenRes.status, text)
-      return redirectError(reqUrl, 'Google no devolvió tokens. Revoca el acceso en myaccount.google.com y vuelve a intentar.')
+      return redirectError(req, 'Google no devolvió tokens. Revoca el acceso en myaccount.google.com y vuelve a intentar.')
     }
 
     const json = (await tokenRes.json()) as any
@@ -52,7 +66,7 @@ export async function GET(req: Request) {
 
     if (!refreshToken) {
       return redirectError(
-        reqUrl,
+        req,
         'Google no devolvió refresh_token. Ve a myaccount.google.com → Seguridad → Acceso de terceros, revoca ZenFinance, y vuelve a conectar.'
       )
     }
@@ -86,7 +100,7 @@ export async function GET(req: Request) {
     const finalRefresh = refreshToken ?? (existing?.refresh_token as string | undefined)
 
     if (!finalRefresh) {
-      return redirectError(reqUrl, 'No se pudo obtener el refresh_token. Revoca y vuelve a intentar.')
+      return redirectError(req, 'No se pudo obtener el refresh_token. Revoca y vuelve a intentar.')
     }
 
     const { error } = await supabase.from('gmail_connections').upsert(
@@ -102,13 +116,13 @@ export async function GET(req: Request) {
 
     if (error) {
       console.error('[Gmail OAuth] db upsert failed:', error.message)
-      return redirectError(reqUrl, `Error al guardar: ${error.message}`)
+      return redirectError(req, `Error al guardar: ${error.message}`)
     }
 
-    return redirectSuccess()
+    return redirectSuccess(req)
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error desconocido'
     console.error('[Gmail OAuth] callback error:', msg)
-    return redirectError(reqUrl, `Error: ${msg}`)
+    return redirectError(req, `Error: ${msg}`)
   }
 }
